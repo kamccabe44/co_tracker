@@ -138,10 +138,12 @@ calendar.
 
 ## Deploying on AWS
 
-See **[docs/deploy-aws.md](docs/deploy-aws.md)** for cost-ranked options.
-Summary: a Lightsail nano instance (or EC2 `t4g.nano`) running the container
-with the SQLite volume on local disk is the cheapest (≈ $4–7/month);
-ECS Fargate + EFS is the fully managed container-native option (≈ $12+/month).
+Current production deployment is **ECS Fargate + EFS**, fully managed with no
+server to patch — see **[deploy/production/README.md](deploy/production/README.md)**
+for the Terraform (≈ $27–30/month, dominated by the ALB's fixed cost). See
+**[docs/deploy-aws.md](docs/deploy-aws.md)** for cheaper options that trade a
+little hands-on upkeep for a much lower bill (a Lightsail nano instance or EC2
+`t4g.nano`, ≈ $4–7/month).
 
 ## Development
 

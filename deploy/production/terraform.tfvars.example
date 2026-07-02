@@ -1,0 +1,13 @@
+# Copy to terraform.tfvars and edit.
+
+aws_region  = "us-east-1"
+domain_name = "1136mpco.com" # must already be a Route 53 hosted zone in this AWS account
+subdomain   = "tracking"     # -> tracking.1136mpco.com
+
+# CHANGE before applying — this seeds the initial admin login.
+users_json = "{\"admin\": \"a-real-password-here\"}"
+
+# Optional cost cut: run on Fargate Spot (~70% cheaper compute) instead of
+# on-demand. Spot tasks can be interrupted (2-minute warning, auto-rescheduled)
+# — fine for an internal tool, adds occasional brief unavailability.
+# use_fargate_spot = true
