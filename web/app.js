@@ -276,6 +276,10 @@ function openEntryDialog(entry) {
 // ---- account management (admins only) ----
 async function loadMe() {
   state.me = await api("/api/auth/me");
+  if (state.me.mustChangePassword) {
+    window.location.href = "/change-password";
+    throw new Error("redirecting to change password");
+  }
   $("#nav-username").textContent = state.me.username;
   if (state.me.isAdmin) {
     $("#manage-accounts-item").classList.remove("d-none");
@@ -310,6 +314,13 @@ async function refreshAccounts() {
       you.className = "badge bg-secondary ms-1";
       you.textContent = "You";
       name.appendChild(you);
+    }
+    if (a.mustChangePassword) {
+      const temp = document.createElement("span");
+      temp.className = "badge bg-warning text-dark ms-1";
+      temp.title = "Signed in with a temporary password until they change it";
+      temp.textContent = "Temp password";
+      name.appendChild(temp);
     }
 
     const role = document.createElement("td");
@@ -422,6 +433,7 @@ function init() {
 
   $("#import-users").addEventListener("change", (ev) => importCSV(ev.target, "/api/import/users"));
   $("#import-entries").addEventListener("change", (ev) => importCSV(ev.target, "/api/import/entries"));
+  $("#import-roster").addEventListener("change", (ev) => importCSV(ev.target, "/api/import/roster", "#import-roster-status"));
 
   $("#entry-form").addEventListener("submit", (ev) => {
     ev.preventDefault();
@@ -453,7 +465,9 @@ function init() {
 
   loadMe()
     .then(refreshAll)
-    .catch((err) => alert(`Failed to load: ${err.message}`));
+    .catch((err) => {
+      if (!window.location.href.includes("change-password")) alert(`Failed to load: ${err.message}`);
+    });
 }
 
 function shiftMonth(delta) {
@@ -461,19 +475,24 @@ function shiftMonth(delta) {
   run(async () => {});
 }
 
-async function importCSV(input, endpoint) {
+async function importCSV(input, endpoint, statusSel = "#import-status") {
   const file = input.files[0];
   if (!file) return;
   input.value = "";
-  const status = $("#import-status");
+  const status = $(statusSel);
   status.textContent = "Importing…";
   try {
     const form = new FormData();
     form.append("file", file);
     const result = await api(endpoint, { method: "POST", body: form });
     const parts = [];
-    if ("created" in result) parts.push(`${result.created} created`);
-    if (result.updated) parts.push(`${result.updated} updated`);
+    for (const [key, label] of [
+      ["created", "created"], ["updated", "updated"],
+      ["peopleCreated", "people added"], ["peopleUpdated", "people updated"],
+      ["accountsCreated", "logins created"],
+    ]) {
+      if (result[key]) parts.push(`${result[key]} ${label}`);
+    }
     let msg = `Done: ${parts.join(", ") || "no rows"}`;
     if (result.errors && result.errors.length) {
       msg += `\n${result.errors.length} error(s):\n` + result.errors.slice(0, 5).join("\n");
