@@ -1,88 +1,64 @@
+/* Army green palette (from os_alerts) */
 :root {
-  --bg: #f6f7fb;
-  --panel: #ffffff;
+  --army-green: #4a5e3a;
+  --army-green-dark: #354530;
+  --army-green-light: #e8f0e2;
+  --army-tan: #b5a26a;
   --border: #dde1ea;
-  --text: #1c2333;
   --muted: #6b7285;
-  --accent: #4f6df5;
   --danger: #e5484d;
   --radius: 8px;
 }
 
-* { box-sizing: border-box; }
-
 body {
-  margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-  background: var(--bg);
-  color: var(--text);
+  background-color: #f0f2ee;
 }
 
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 1.5rem;
-  padding: 0.6rem 1.25rem;
-  background: var(--panel);
-  border-bottom: 1px solid var(--border);
+/* Bootstrap-style army helpers (mirrors alerts.css) */
+.bg-army { background-color: var(--army-green) !important; }
+.text-army { color: var(--army-green) !important; }
+.btn-army {
+  background-color: var(--army-green);
+  border-color: var(--army-green);
+  color: #fff;
 }
-
-.topbar h1 { font-size: 1.15rem; margin: 0; }
-
-.month-nav {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
+.btn-army:hover {
+  background-color: var(--army-green-dark);
+  border-color: var(--army-green-dark);
+  color: #fff;
 }
-
-.month-nav #month-label {
-  min-width: 11ch;
-  text-align: center;
-  font-weight: 600;
+.btn-outline-army {
+  border-color: var(--army-green);
+  color: var(--army-green);
 }
-
-button {
-  font: inherit;
-  padding: 0.35rem 0.7rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--panel);
-  color: var(--text);
-  cursor: pointer;
+.btn-outline-army:hover {
+  background-color: var(--army-green);
+  color: #fff;
 }
-button:hover { border-color: var(--accent); }
-button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
-button.danger { color: var(--danger); border-color: var(--danger); }
+.bg-army-light { background-color: var(--army-green-light) !important; }
+
+.navbar-dark .navbar-nav .nav-link.active { font-weight: 600; }
+
+.footer { font-size: 0.75rem; }
+
+.card-header.bg-army { font-size: 0.9rem; letter-spacing: 0.03em; }
+
 .hidden { display: none !important; }
+
+/* ---- Layout ---- */
 
 .layout {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 300px 1fr;
   gap: 1rem;
-  padding: 1rem;
   max-width: 1400px;
-  margin: 0 auto;
 }
 
 @media (max-width: 800px) {
   .layout { grid-template-columns: 1fr; }
 }
 
-.panel {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  padding: 0.9rem;
-  margin-bottom: 1rem;
-}
-
-.panel h2 {
-  margin: 0 0 0.6rem;
-  font-size: 0.85rem;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  color: var(--muted);
-}
+/* ---- Sidebar panels ---- */
 
 .unit-list, .user-list {
   list-style: none;
@@ -120,6 +96,7 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   background: none;
   color: var(--muted);
   font-size: 1rem;
+  cursor: pointer;
 }
 .icon-btn:hover { color: var(--danger); }
 
@@ -131,36 +108,24 @@ button.danger { color: var(--danger); border-color: var(--danger); }
 .inline-form input[type="text"] {
   flex: 1;
   min-width: 0;
-  padding: 0.35rem 0.5rem;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font: inherit;
 }
 
 .inline-form input[type="color"] {
-  width: 34px;
-  height: 34px;
+  width: 31px;
+  height: 31px;
   padding: 2px;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: var(--panel);
+  background: #fff;
 }
 
-.import-label {
-  display: block;
-  font-size: 0.85rem;
-  margin-bottom: 0.6rem;
-}
-.import-label small { color: var(--muted); }
-.import-label input { display: block; margin-top: 0.25rem; width: 100%; font-size: 0.8rem; }
-.import-status { font-size: 0.8rem; color: var(--muted); margin: 0; white-space: pre-line; }
+.import-label { display: block; font-size: 0.85rem; margin-bottom: 0.6rem; }
+.import-label input { display: block; margin-top: 0.25rem; width: 100%; }
+.import-status { white-space: pre-line; }
 
 /* ---- Calendar ---- */
 
 .calendar-wrap {
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
   overflow: hidden;
 }
 
@@ -168,6 +133,7 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   border-bottom: 1px solid var(--border);
+  background: var(--army-green-light);
 }
 
 .weekday-row div {
@@ -176,7 +142,7 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--army-green-dark);
 }
 
 .calendar {
@@ -193,10 +159,10 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   overflow: hidden;
 }
 .day:nth-child(7n) { border-right: none; }
-.day:hover { background: #fafbff; }
+.day:hover { background: var(--army-green-light); }
 .day.other-month { background: #f1f2f7; color: var(--muted); }
 .day.today .day-num {
-  background: var(--accent);
+  background: var(--army-green);
   color: #fff;
   border-radius: 999px;
 }
@@ -226,13 +192,14 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   cursor: pointer;
 }
 
-/* ---- Tooltip ---- */
+/* ---- Tooltip ----
+   Named .tooltip-box because Bootstrap reserves .tooltip. */
 
-.tooltip {
+.tooltip-box {
   position: fixed;
-  z-index: 50;
+  z-index: 1200;
   max-width: 260px;
-  background: #22263a;
+  background: var(--army-green-dark);
   color: #fff;
   border-radius: 6px;
   padding: 0.5rem 0.65rem;
@@ -241,12 +208,12 @@ button.danger { color: var(--danger); border-color: var(--danger); }
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
 }
 
-.tooltip .tt-title { font-weight: 600; margin-bottom: 0.25rem; }
-.tooltip ul { margin: 0; padding-left: 1.1rem; }
-.tooltip .tt-empty { color: #b9bed1; font-style: italic; }
-.tooltip .tt-notes { margin-top: 0.25rem; color: #b9bed1; }
+.tooltip-box .tt-title { font-weight: 600; margin-bottom: 0.25rem; }
+.tooltip-box ul { margin: 0; padding-left: 1.1rem; }
+.tooltip-box .tt-empty { color: #cfd8c6; font-style: italic; }
+.tooltip-box .tt-notes { margin-top: 0.25rem; color: #cfd8c6; }
 
-/* ---- Dialog ---- */
+/* ---- Entry dialog ---- */
 
 dialog {
   border: 1px solid var(--border);
@@ -256,7 +223,13 @@ dialog {
 }
 dialog::backdrop { background: rgba(20, 24, 40, 0.4); }
 
-dialog h2 { margin: 0 0 0.8rem; font-size: 1.05rem; }
+dialog h2 {
+  margin: 0 -1.25rem 0.8rem;
+  padding: 0 1.25rem 0.6rem;
+  font-size: 1.05rem;
+  color: var(--army-green-dark);
+  border-bottom: 3px solid var(--army-green);
+}
 
 dialog label {
   display: block;
@@ -273,7 +246,7 @@ dialog input[type="date"], dialog input[type="text"], dialog select {
   border: 1px solid var(--border);
   border-radius: var(--radius);
   font: inherit;
-  color: var(--text);
+  color: inherit;
 }
 
 .user-checks {
@@ -290,7 +263,7 @@ dialog input[type="date"], dialog input[type="text"], dialog select {
   align-items: center;
   gap: 0.4rem;
   margin: 0 0 0.25rem;
-  color: var(--text);
+  color: inherit;
 }
 
 .user-checks .no-users { color: var(--muted); font-size: 0.8rem; margin: 0; }

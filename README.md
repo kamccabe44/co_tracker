@@ -22,6 +22,9 @@ lowest-cost AWS deployments possible (see [docs/deploy-aws.md](docs/deploy-aws.m
   Unknown units and people in a schedule CSV are created automatically;
   auto-created units get distinct colors from a built-in palette.
 - **JSON REST API** underneath, usable without the UI.
+- **Authentication**: session-cookie login (ported from
+  [os_alerts](https://github.com/kamccabe44/os_alerts)). Every page and API
+  route requires sign-in; admins manage login accounts from the UI.
 
 ## Quick start
 
@@ -32,7 +35,8 @@ docker compose up --build
 go run .
 ```
 
-Open <http://localhost:8080>. Data is stored in a SQLite file
+Open <http://localhost:8080> and sign in (default account: `admin` / `admin` —
+change it after first login via the user menu). Data is stored in a SQLite file
 (`data/co_tracker.db` natively, `/data/co_tracker.db` in the container —
 mounted as the `co_tracker_data` volume by docker-compose).
 
@@ -41,12 +45,34 @@ then `samples/schedule.csv` under **Schedule**, and navigate to July 2026.
 
 ### Configuration
 
-| Env var       | Default              | Purpose                    |
-|---------------|----------------------|----------------------------|
-| `LISTEN_ADDR` | `:8080`              | HTTP listen address        |
-| `DB_PATH`     | `data/co_tracker.db` | SQLite database file path  |
+| Env var       | Default              | Purpose                                        |
+|---------------|----------------------|------------------------------------------------|
+| `LISTEN_ADDR` | `:8080`              | HTTP listen address                            |
+| `DB_PATH`     | `data/co_tracker.db` | SQLite database file path                      |
+| `USERS_JSON`  | `{"admin": "admin"}` | Initial login accounts (username -> password)  |
 
 Health check endpoint: `GET /healthz`.
+
+## Authentication
+
+The auth model is ported from the os_alerts app:
+
+- **Session-cookie login** at `/login`; sessions last 14 days and are stored
+  in SQLite, so they survive restarts. `/logout` ends the session.
+- **Seeding**: on first boot (empty accounts table) accounts are created from
+  `USERS_JSON`; the username `admin` gets admin privileges. Later boots never
+  overwrite accounts, so passwords changed in-app persist.
+- **Change password**: any signed-in account, via the user menu
+  (`/change-password`).
+- **Account management** (admin only): the *Manage Accounts* entry in the user
+  menu lists login accounts and supports add, delete, and password reset.
+  You cannot delete your own account or the last remaining admin.
+- Every UI page and `/api/*` route requires a session — browsers are
+  redirected to `/login`, API calls get `401`. Only `/login`, `/logout`, and
+  `/healthz` are open.
+
+Login *accounts* are separate from *People* on the schedule: people are data
+being tracked, accounts can sign in.
 
 ## CSV formats
 
@@ -80,8 +106,18 @@ the rest of the import.
 
 ## API
 
+All `/api/*` routes require a session cookie (sign in at `/login` first).
+Account routes marked *admin* additionally require an admin account.
+
 | Method & path                | Description                                    |
 |------------------------------|------------------------------------------------|
+| `POST /login`                | Form login (`username`, `password`, `next`)    |
+| `GET /logout`                | End the session                                |
+| `GET /api/auth/me`           | Current account (`username`, `isAdmin`)        |
+| `GET /api/accounts`          | List login accounts (admin)                    |
+| `POST /api/accounts`         | Create `{username, password, isAdmin}` (admin) |
+| `DELETE /api/accounts/{id}`  | Delete account (admin; not self/last admin)    |
+| `POST /api/accounts/{id}/reset-password` | Set `{password}` (admin)          |
 | `GET /api/units`             | List business units                            |
 | `POST /api/units`            | Create `{name, color}`                         |
 | `PUT /api/units/{id}`        | Update name/color                              |
@@ -118,6 +154,6 @@ Project layout:
 
 - `main.go` — entrypoint; embeds `web/` into the binary
 - `internal/store` — SQLite persistence (pure-Go driver, no CGO)
-- `internal/api` — HTTP handlers, CSV import
+- `internal/api` — HTTP handlers, auth middleware, login pages, CSV import
 - `web/` — vanilla JS/CSS single-page UI (no build step)
 - `samples/` — example CSV files

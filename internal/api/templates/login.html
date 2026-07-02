@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Sign In – CO Tracker</title>
+  <link rel="stylesheet" href="/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
+  <style>
+    :root { --army-green: #4a5e3a; }
+    body { background-color: #f0f2ee; }
+    .login-card { max-width: 400px; }
+    .btn-army { background-color: var(--army-green); border-color: var(--army-green); color: #fff; }
+    .btn-army:hover { background-color: #354530; color: #fff; }
+    .header-bar { background-color: var(--army-green); }
+    .seal { font-size: 3rem; }
+  </style>
+</head>
+<body class="d-flex align-items-center justify-content-center min-vh-100">
+
+<div class="login-card w-100 px-3">
+
+  <div class="card border-0 shadow">
+    <div class="header-bar text-white text-center py-4 rounded-top">
+      <div class="seal"><i class="bi bi-shield-fill"></i></div>
+      <h5 class="mt-2 mb-0 fw-bold">CO Tracker</h5>
+      <small class="opacity-75">Daily Unit Schedule</small>
+    </div>
+
+    <div class="card-body p-4">
+
+      {{if .Error}}
+      <div class="alert alert-danger py-2 small" role="alert">
+        <i class="bi bi-x-circle me-1"></i>{{.Error}}
+      </div>
+      {{end}}
+
+      <form method="post" action="/login">
+        <input type="hidden" name="next" value="{{.Next}}">
+
+        <div class="mb-3">
+          <label class="form-label fw-semibold small text-uppercase">Username</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-person"></i></span>
+            <input type="text" name="username" class="form-control" placeholder="Enter username"
+                   autofocus autocomplete="username" required>
+          </div>
+        </div>
+
+        <div class="mb-4">
+          <label class="form-label fw-semibold small text-uppercase">Password</label>
+          <div class="input-group">
+            <span class="input-group-text"><i class="bi bi-lock"></i></span>
+            <input type="password" name="password" class="form-control" placeholder="Enter password"
+                   autocomplete="current-password" required>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-army w-100">
+          <i class="bi bi-box-arrow-in-right me-2"></i>Sign In
+        </button>
+      </form>
+
+    </div>
+  </div>
+
+  <p class="text-center text-muted small mt-3">
+    CO Tracker &mdash; sign in to view and edit the unit schedule
+  </p>
+
+</div>
+
+</body>
+</html>

@@ -72,6 +72,19 @@ CREATE TABLE IF NOT EXISTS entry_users (
 	user_id  INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
 	PRIMARY KEY (entry_id, user_id)
 );
+CREATE TABLE IF NOT EXISTS accounts (
+	id            INTEGER PRIMARY KEY AUTOINCREMENT,
+	username      TEXT NOT NULL,
+	password_hash TEXT NOT NULL,
+	is_admin      INTEGER NOT NULL DEFAULT 0,
+	created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+	UNIQUE(username COLLATE NOCASE)
+);
+CREATE TABLE IF NOT EXISTS sessions (
+	token      TEXT PRIMARY KEY,
+	account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+	expires_at TEXT NOT NULL
+);
 `
 
 // Open opens (creating if needed) the SQLite database at path and applies the schema.

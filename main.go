@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"embed"
+	"encoding/json"
 	"errors"
 	"io/fs"
 	"log"
@@ -28,6 +29,10 @@ func main() {
 		log.Fatalf("open store: %v", err)
 	}
 	defer st.Close()
+
+	if err := st.SeedAccounts(seedUsers()); err != nil {
+		log.Fatalf("seed accounts: %v", err)
+	}
 
 	staticFS, err := fs.Sub(webFS, "web")
 	if err != nil {
@@ -63,4 +68,20 @@ func envOr(key, fallback string) string {
 		return v
 	}
 	return fallback
+}
+
+// seedUsers parses USERS_JSON (a username -> password object, as in os_alerts)
+// into the initial login accounts. Only used when the accounts table is empty.
+func seedUsers() map[string]string {
+	fallback := map[string]string{"admin": "admin"}
+	raw := os.Getenv("USERS_JSON")
+	if raw == "" {
+		return fallback
+	}
+	var users map[string]string
+	if err := json.Unmarshal([]byte(raw), &users); err != nil || len(users) == 0 {
+		log.Printf("invalid USERS_JSON, using default admin account: %v", err)
+		return fallback
+	}
+	return users
 }

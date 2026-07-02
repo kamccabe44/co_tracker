@@ -27,6 +27,18 @@ func New(st *store.Store, staticFS fs.FS) http.Handler {
 		w.Write([]byte("ok"))
 	})
 
+	mux.HandleFunc("GET /login", s.loginPage)
+	mux.HandleFunc("POST /login", s.doLogin)
+	mux.HandleFunc("GET /logout", s.logout)
+	mux.HandleFunc("GET /change-password", s.changePasswordPage)
+	mux.HandleFunc("POST /change-password", s.doChangePassword)
+
+	mux.HandleFunc("GET /api/auth/me", s.authMe)
+	mux.HandleFunc("GET /api/accounts", requireAdmin(s.listAccounts))
+	mux.HandleFunc("POST /api/accounts", requireAdmin(s.createAccount))
+	mux.HandleFunc("DELETE /api/accounts/{id}", requireAdmin(s.deleteAccount))
+	mux.HandleFunc("POST /api/accounts/{id}/reset-password", requireAdmin(s.resetAccountPassword))
+
 	mux.HandleFunc("GET /api/users", s.listUsers)
 	mux.HandleFunc("POST /api/users", s.createUser)
 	mux.HandleFunc("DELETE /api/users/{id}", s.deleteUser)
@@ -44,7 +56,7 @@ func New(st *store.Store, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/import/entries", s.importEntriesCSV)
 
 	mux.Handle("/", http.FileServerFS(staticFS))
-	return logRequests(mux)
+	return logRequests(s.requireAuth(mux))
 }
 
 // ---- Users ----
