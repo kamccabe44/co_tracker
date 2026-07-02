@@ -396,3 +396,207 @@ func TestChangePassword(t *testing.T) {
 	}
 	login(t, ts, "admin", "newpass")
 }
+
+// ---- roster import ----
+
+func TestRosterImport(t *testing.T) {
+	ts, admin := newTestServer(t)
+
+	out := postCSV(t, admin, ts.URL+"/api/import/roster", strings.Join([]string{
+		"Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone",
+		"CO,,CPT,Rivera,Alex,HQ,M,,,",
+		"Patrol,,SPC,Ortiz,Ben,1st,M,,,",
+	}, "\n"))
+	if out["peopleCreated"].(float64) != 2 || out["accountsCreated"].(float64) != 2 {
+		t.Fatalf("peopleCreated/accountsCreated = %v/%v, want 2/2", out["peopleCreated"], out["accountsCreated"])
+	}
+
+	people := getList(t, admin, ts.URL+"/api/users")
+	if len(people) != 2 {
+		t.Fatalf("got %d people, want 2", len(people))
+	}
+	var richard map[string]any
+	for _, p := range people {
+		if p["name"] == "Alex Rivera" {
+			richard = p
+		}
+	}
+	if richard == nil {
+		t.Fatalf("Alex Rivera not found among %v", people)
+	}
+	if richard["rank"] != "CPT" || richard["billet"] != "CO" || richard["platoon"] != "HQ" {
+		t.Errorf("roster fields wrong: %v", richard)
+	}
+
+	accounts := getList(t, admin, ts.URL+"/api/accounts")
+	var rhue map[string]any
+	for _, a := range accounts {
+		if a["username"] == "alex.rivera" {
+			rhue = a
+		}
+	}
+	if rhue == nil {
+		t.Fatalf("alex.rivera account not found among %v", accounts)
+	}
+	if rhue["mustChangePassword"] != true {
+		t.Errorf("mustChangePassword = %v, want true", rhue["mustChangePassword"])
+	}
+
+	// The new account can log in with the default password immediately.
+	richardClient := login(t, ts, "alex.rivera", "password")
+	richardClient.Get(ts.URL + "/logout")
+
+	// Simulate them changing their password before the next reupload.
+	c2 := login(t, ts, "alex.rivera", "password")
+	res, err := c2.PostForm(ts.URL+"/change-password", url.Values{
+		"current_password": {"password"}, "new_password": {"a-real-password"}, "confirm_password": {"a-real-password"},
+	})
+	if err != nil {
+		t.Fatalf("change-password: %v", err)
+	}
+	res.Body.Close()
+
+	// Reupload the same roster, now with DOB filled in — should update the
+	// existing person, NOT create a duplicate person or account, and must
+	// NOT touch the password Richard already changed.
+	out = postCSV(t, admin, ts.URL+"/api/import/roster", strings.Join([]string{
+		"Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone",
+		"CO,,CPT,Rivera,Alex,HQ,M,1990-01-01,,",
+		"Patrol,,SPC,Ortiz,Ben,1st,M,,,",
+	}, "\n"))
+	if out["peopleCreated"].(float64) != 0 || out["peopleUpdated"].(float64) != 2 {
+		t.Fatalf("on reupload peopleCreated/peopleUpdated = %v/%v, want 0/2", out["peopleCreated"], out["peopleUpdated"])
+	}
+	if out["accountsCreated"].(float64) != 0 {
+		t.Fatalf("on reupload accountsCreated = %v, want 0 (accounts already exist)", out["accountsCreated"])
+	}
+	if people := getList(t, admin, ts.URL+"/api/users"); len(people) != 2 {
+		t.Fatalf("got %d people after reupload, want 2 (no duplicates)", len(people))
+	}
+	for _, p := range getList(t, admin, ts.URL+"/api/users") {
+		if p["name"] == "Alex Rivera" && p["dob"] != "1990-01-01" {
+			t.Errorf("dob not updated on reupload: %v", p)
+		}
+	}
+	// Richard's changed password still works — reupload didn't reset it.
+	login(t, ts, "alex.rivera", "a-real-password")
+
+	// A blank cell on reupload must not erase data filled in earlier.
+	out = postCSV(t, admin, ts.URL+"/api/import/roster", strings.Join([]string{
+		"Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone",
+		"CO,,CPT,Rivera,Alex,HQ,M,,,",
+	}, "\n"))
+	for _, p := range getList(t, admin, ts.URL+"/api/users") {
+		if p["name"] == "Alex Rivera" && p["dob"] != "1990-01-01" {
+			t.Errorf("blank DOB cell erased existing value: %v", p)
+		}
+	}
+}
+
+func TestRosterUsernameCollision(t *testing.T) {
+	ts, admin := newTestServer(t)
+	// An unrelated account already sits on the username this roster row
+	// would generate (not linked via person_id — e.g. an admin created it
+	// by hand before the roster was ever imported).
+	doJSON(t, admin, "POST", ts.URL+"/api/accounts",
+		map[string]any{"username": "john.smith", "password": "unrelated"}, http.StatusCreated)
+
+	out := postCSV(t, admin, ts.URL+"/api/import/roster", strings.Join([]string{
+		"Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone",
+		"Patrol,,SPC,Smith,John,1st,M,,,",
+	}, "\n"))
+	if out["accountsCreated"].(float64) != 1 {
+		t.Fatalf("accountsCreated = %v, want 1", out["accountsCreated"])
+	}
+
+	accounts := getList(t, admin, ts.URL+"/api/accounts")
+	var haveOriginal, haveSuffixed bool
+	for _, a := range accounts {
+		if a["username"] == "john.smith" {
+			haveOriginal = true
+		}
+		if a["username"] == "john.smith2" {
+			haveSuffixed = true
+		}
+	}
+	if !haveOriginal || !haveSuffixed {
+		t.Fatalf("expected both john.smith and john.smith2 accounts, got %v", accounts)
+	}
+}
+
+// ---- must-change-password enforcement ----
+
+func TestMustChangePasswordLocksAccountOut(t *testing.T) {
+	ts, admin := newTestServer(t)
+	postCSV(t, admin, ts.URL+"/api/import/roster", strings.Join([]string{
+		"Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone",
+		"Patrol,,SPC,Doe,Jane,1st,F,,,",
+	}, "\n"))
+
+	c := login(t, ts, "jane.doe", "password")
+
+	// /api/auth/me stays reachable (the frontend needs it to redirect).
+	doJSON(t, c, "GET", ts.URL+"/api/auth/me", nil, http.StatusOK)
+
+	// Everything else is blocked until the password is changed.
+	res, err := c.Get(ts.URL + "/api/units")
+	if err != nil {
+		t.Fatalf("GET /api/units: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("locked-out API access: status %d, want 403", res.StatusCode)
+	}
+
+	noRedirect := &http.Client{Jar: c.Jar, CheckRedirect: func(*http.Request, []*http.Request) error {
+		return http.ErrUseLastResponse
+	}}
+	res, err = noRedirect.Get(ts.URL + "/")
+	if err != nil {
+		t.Fatalf("GET /: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusFound || res.Header.Get("Location") != "/change-password" {
+		t.Fatalf("locked-out UI access: status %d location %q, want 302 to /change-password",
+			res.StatusCode, res.Header.Get("Location"))
+	}
+
+	// Changing the password clears the lock.
+	res, err = c.PostForm(ts.URL+"/change-password", url.Values{
+		"current_password": {"password"}, "new_password": {"jane-picks-this"}, "confirm_password": {"jane-picks-this"},
+	})
+	if err != nil {
+		t.Fatalf("change-password: %v", err)
+	}
+	res.Body.Close()
+
+	getList(t, c, ts.URL+"/api/units")
+
+	me := doJSON(t, c, "GET", ts.URL+"/api/auth/me", nil, http.StatusOK)
+	if me["mustChangePassword"] != false {
+		t.Errorf("mustChangePassword after change = %v, want false", me["mustChangePassword"])
+	}
+}
+
+func TestAdminResetPasswordAlsoRequiresChange(t *testing.T) {
+	ts, admin := newTestServer(t)
+	acc := doJSON(t, admin, "POST", ts.URL+"/api/accounts",
+		map[string]any{"username": "1stPlatoon", "password": "misfits"}, http.StatusCreated)
+	if acc["mustChangePassword"] != false {
+		t.Errorf("freshly admin-created account mustChangePassword = %v, want false", acc["mustChangePassword"])
+	}
+	accID := int64(acc["id"].(float64))
+
+	doJSON(t, admin, "POST", fmt.Sprintf("%s/api/accounts/%d/reset-password", ts.URL, accID),
+		map[string]any{"password": "temp1234"}, http.StatusNoContent)
+
+	c := login(t, ts, "1stPlatoon", "temp1234")
+	res, err := c.Get(ts.URL + "/api/units")
+	if err != nil {
+		t.Fatalf("GET /api/units: %v", err)
+	}
+	res.Body.Close()
+	if res.StatusCode != http.StatusForbidden {
+		t.Fatalf("after admin reset: status %d, want 403 (must change password)", res.StatusCode)
+	}
+}

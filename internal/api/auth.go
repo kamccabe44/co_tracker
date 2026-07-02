@@ -43,8 +43,19 @@ func openPath(path string) bool {
 	return strings.HasPrefix(path, "/vendor/")
 }
 
+// passwordChangeExemptPaths stay reachable for an account with
+// MustChangePassword set — everything else force-redirects to /change-password
+// until they pick a new one.
+var passwordChangeExemptPaths = map[string]bool{
+	"/change-password": true,
+	"/logout":           true,
+	"/api/auth/me":      true, // the frontend needs this to know to redirect
+}
+
 // requireAuth redirects unauthenticated browser requests to /login and
-// rejects unauthenticated API requests with 401.
+// rejects unauthenticated API requests with 401. Once authenticated, an
+// account with MustChangePassword set (roster-provisioned or admin-reset)
+// is confined to the change-password flow until it picks its own password.
 func (s *server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if openPath(r.URL.Path) {
@@ -53,6 +64,17 @@ func (s *server) requireAuth(next http.Handler) http.Handler {
 		}
 		if cookie, err := r.Cookie(sessionCookie); err == nil {
 			if account, err := s.st.SessionAccount(cookie.Value); err == nil {
+				if account.MustChangePassword && !passwordChangeExemptPaths[r.URL.Path] {
+					if strings.HasPrefix(r.URL.Path, "/api/") {
+						writeJSON(w, http.StatusForbidden, map[string]string{
+							"error":              "password change required",
+							"mustChangePassword": "true",
+						})
+						return
+					}
+					http.Redirect(w, r, "/change-password", http.StatusFound)
+					return
+				}
 				ctx := context.WithValue(r.Context(), accountKey, account)
 				next.ServeHTTP(w, r.WithContext(ctx))
 				return
@@ -158,8 +180,10 @@ func (s *server) logout(w http.ResponseWriter, r *http.Request) {
 
 // ---- change password ----
 
-func (s *server) changePasswordPage(w http.ResponseWriter, _ *http.Request) {
-	renderPage(w, http.StatusOK, "change_password.html", nil)
+func (s *server) changePasswordPage(w http.ResponseWriter, r *http.Request) {
+	renderPage(w, http.StatusOK, "change_password.html", map[string]any{
+		"Required": currentAccount(r).MustChangePassword,
+	})
 }
 
 func (s *server) doChangePassword(w http.ResponseWriter, r *http.Request) {
@@ -167,14 +191,16 @@ func (s *server) doChangePassword(w http.ResponseWriter, r *http.Request) {
 		badRequest(w, "invalid form data")
 		return
 	}
+	wasRequired := currentAccount(r).MustChangePassword
 	render := func(errMsg string, success bool) {
 		status := http.StatusOK
 		if errMsg != "" {
 			status = http.StatusBadRequest
 		}
 		renderPage(w, status, "change_password.html", map[string]any{
-			"Error":   errMsg,
-			"Success": success,
+			"Error":    errMsg,
+			"Success":  success,
+			"Required": wasRequired && !success,
 		})
 	}
 

@@ -199,6 +199,24 @@
             </form>
           </div>
         </div>
+
+        <div class="card border-0 shadow-sm mt-3">
+          <div class="card-header bg-army text-white">
+            <strong><i class="bi bi-file-earmark-spreadsheet me-2"></i>Import Roster</strong>
+          </div>
+          <div class="card-body">
+            <p class="text-muted small mb-2">
+              Upload a roster CSV (<code>Billet,Patrol,Rank,Last,First,PLT,Sex,DOB,Vehicle,Zone</code>) to
+              add or update people in bulk. Only First and Last are required — every other column may be
+              blank, and re-uploading later to fill in blanks (or fix a typo) is the normal way to keep this
+              in sync; it never overwrites a field with a blank cell. Each new person also gets a login
+              with the password <code>password</code>, which they must change on first sign-in — accounts
+              that already exist are never touched by a reupload.
+            </p>
+            <input type="file" id="import-roster" class="form-control form-control-sm" accept=".csv,text/csv">
+            <p id="import-roster-status" class="import-status text-muted small mb-0 mt-2"></p>
+          </div>
+        </div>
       </div>
     </div>
   </div>

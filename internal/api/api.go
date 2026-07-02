@@ -43,6 +43,7 @@ func New(st *store.Store, staticFS fs.FS) http.Handler {
 	mux.HandleFunc("POST /api/users", s.createUser)
 	mux.HandleFunc("DELETE /api/users/{id}", s.deleteUser)
 	mux.HandleFunc("POST /api/import/users", s.importUsersCSV)
+	mux.HandleFunc("POST /api/import/roster", requireAdmin(s.importRosterCSV))
 
 	mux.HandleFunc("GET /api/units", s.listUnits)
 	mux.HandleFunc("POST /api/units", s.createUnit)

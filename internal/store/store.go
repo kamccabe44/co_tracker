@@ -26,6 +26,17 @@ type User struct {
 	ID    int64  `json:"id"`
 	Name  string `json:"name"`
 	Email string `json:"email,omitempty"`
+
+	// Roster profile fields — all optional, filled in by a person or a roster
+	// CSV import. Blank ("") means not yet known, not "cleared".
+	Rank    string `json:"rank,omitempty"`
+	Billet  string `json:"billet,omitempty"`
+	Platoon string `json:"platoon,omitempty"`
+	Sex     string `json:"sex,omitempty"`
+	DOB     string `json:"dob,omitempty"`
+	Vehicle string `json:"vehicle,omitempty"`
+	Zone    string `json:"zone,omitempty"`
+	Patrol  string `json:"patrol,omitempty"`
 }
 
 type Unit struct {
@@ -73,11 +84,17 @@ CREATE TABLE IF NOT EXISTS entry_users (
 	PRIMARY KEY (entry_id, user_id)
 );
 CREATE TABLE IF NOT EXISTS accounts (
-	id            INTEGER PRIMARY KEY AUTOINCREMENT,
-	username      TEXT NOT NULL,
-	password_hash TEXT NOT NULL,
-	is_admin      INTEGER NOT NULL DEFAULT 0,
-	created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+	id                   INTEGER PRIMARY KEY AUTOINCREMENT,
+	username             TEXT NOT NULL,
+	password_hash        TEXT NOT NULL,
+	is_admin             INTEGER NOT NULL DEFAULT 0,
+	must_change_password INTEGER NOT NULL DEFAULT 0,
+	-- Set only for accounts provisioned from a roster import; NULL for
+	-- accounts created directly (the seeded default admin, admin-added
+	-- accounts). Lets a reupload recognize "this person already has an
+	-- account" without depending on the generated username never colliding.
+	person_id            INTEGER REFERENCES users(id) ON DELETE SET NULL,
+	created_at           TEXT NOT NULL DEFAULT (datetime('now')),
 	UNIQUE(username COLLATE NOCASE)
 );
 CREATE TABLE IF NOT EXISTS sessions (
@@ -86,6 +103,36 @@ CREATE TABLE IF NOT EXISTS sessions (
 	expires_at TEXT NOT NULL
 );
 `
+
+// rosterColumns are added to a pre-existing users table via ALTER TABLE,
+// since "CREATE TABLE IF NOT EXISTS" above is a no-op against a database
+// that already has the table from before these columns existed.
+var rosterColumns = []string{
+	"rank", "billet", "platoon", "sex", "dob", "vehicle", "zone", "patrol",
+}
+
+// migrate adds columns introduced after a table's original CREATE TABLE, for
+// databases that predate them. ALTER TABLE ADD COLUMN has no IF NOT EXISTS
+// form in SQLite, so duplicate-column errors are expected and ignored.
+func migrate(db *sql.DB) error {
+	for _, col := range rosterColumns {
+		_, err := db.Exec(fmt.Sprintf(`ALTER TABLE users ADD COLUMN %s TEXT NOT NULL DEFAULT ''`, col)) //nolint:gosec // col is a compile-time constant
+		if err != nil && !isDuplicateColumnErr(err) {
+			return fmt.Errorf("add users.%s: %w", col, err)
+		}
+	}
+	if _, err := db.Exec(`ALTER TABLE accounts ADD COLUMN must_change_password INTEGER NOT NULL DEFAULT 0`); err != nil && !isDuplicateColumnErr(err) {
+		return fmt.Errorf("add accounts.must_change_password: %w", err)
+	}
+	if _, err := db.Exec(`ALTER TABLE accounts ADD COLUMN person_id INTEGER REFERENCES users(id) ON DELETE SET NULL`); err != nil && !isDuplicateColumnErr(err) {
+		return fmt.Errorf("add accounts.person_id: %w", err)
+	}
+	return nil
+}
+
+func isDuplicateColumnErr(err error) bool {
+	return err != nil && strings.Contains(err.Error(), "duplicate column name")
+}
 
 // Open opens (creating if needed) the SQLite database at path and applies the schema.
 func Open(path string) (*Store, error) {
@@ -105,23 +152,36 @@ func Open(path string) (*Store, error) {
 		db.Close()
 		return nil, fmt.Errorf("apply schema: %w", err)
 	}
+	if err := migrate(db); err != nil {
+		db.Close()
+		return nil, fmt.Errorf("migrate schema: %w", err)
+	}
 	return &Store{db: db}, nil
 }
 
 func (s *Store) Close() error { return s.db.Close() }
 
+const userColumns = `id, name, email, rank, billet, platoon, sex, dob, vehicle, zone, patrol`
+
+func scanUser(row interface{ Scan(...any) error }) (User, error) {
+	var u User
+	err := row.Scan(&u.ID, &u.Name, &u.Email, &u.Rank, &u.Billet, &u.Platoon,
+		&u.Sex, &u.DOB, &u.Vehicle, &u.Zone, &u.Patrol)
+	return u, err
+}
+
 // ---- Users ----
 
 func (s *Store) ListUsers() ([]User, error) {
-	rows, err := s.db.Query(`SELECT id, name, email FROM users ORDER BY name COLLATE NOCASE`)
+	rows, err := s.db.Query(`SELECT ` + userColumns + ` FROM users ORDER BY name COLLATE NOCASE`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	users := []User{}
 	for rows.Next() {
-		var u User
-		if err := rows.Scan(&u.ID, &u.Name, &u.Email); err != nil {
+		u, err := scanUser(rows)
+		if err != nil {
 			return nil, err
 		}
 		users = append(users, u)

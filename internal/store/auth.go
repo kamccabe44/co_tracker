@@ -17,10 +17,20 @@ var ErrBadCredentials = errors.New("invalid username or password")
 // Account is a login identity for the app itself — distinct from User,
 // which is a person shown on the schedule.
 type Account struct {
-	ID        int64  `json:"id"`
-	Username  string `json:"username"`
-	IsAdmin   bool   `json:"isAdmin"`
-	CreatedAt string `json:"createdAt"`
+	ID                 int64  `json:"id"`
+	Username           string `json:"username"`
+	IsAdmin            bool   `json:"isAdmin"`
+	MustChangePassword bool   `json:"mustChangePassword"`
+	PersonID           *int64 `json:"personId,omitempty"`
+	CreatedAt          string `json:"createdAt"`
+}
+
+const accountColumns = `id, username, is_admin, must_change_password, person_id, created_at`
+
+func scanAccount(row interface{ Scan(...any) error }) (Account, error) {
+	var a Account
+	err := row.Scan(&a.ID, &a.Username, &a.IsAdmin, &a.MustChangePassword, &a.PersonID, &a.CreatedAt)
+	return a, err
 }
 
 func hashPassword(password string) string {
@@ -52,12 +62,11 @@ func (s *Store) SeedAccounts(users map[string]string) error {
 
 // Authenticate returns the account matching the credentials, or ErrBadCredentials.
 func (s *Store) Authenticate(username, password string) (Account, error) {
-	var a Account
-	err := s.db.QueryRow(
-		`SELECT id, username, is_admin, created_at FROM accounts
+	a, err := scanAccount(s.db.QueryRow(
+		`SELECT `+accountColumns+` FROM accounts
 		 WHERE username = ? COLLATE NOCASE AND password_hash = ?`,
 		strings.TrimSpace(username), hashPassword(password),
-	).Scan(&a.ID, &a.Username, &a.IsAdmin, &a.CreatedAt)
+	))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrBadCredentials
 	}
@@ -65,15 +74,15 @@ func (s *Store) Authenticate(username, password string) (Account, error) {
 }
 
 func (s *Store) ListAccounts() ([]Account, error) {
-	rows, err := s.db.Query(`SELECT id, username, is_admin, created_at FROM accounts ORDER BY created_at, id`)
+	rows, err := s.db.Query(`SELECT ` + accountColumns + ` FROM accounts ORDER BY created_at, id`)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
 	accounts := []Account{}
 	for rows.Next() {
-		var a Account
-		if err := rows.Scan(&a.ID, &a.Username, &a.IsAdmin, &a.CreatedAt); err != nil {
+		a, err := scanAccount(rows)
+		if err != nil {
 			return nil, err
 		}
 		accounts = append(accounts, a)
@@ -103,11 +112,45 @@ func (s *Store) CreateAccount(username, password string, isAdmin bool) (Account,
 	return s.GetAccount(id)
 }
 
+// AccountByPersonID returns the account linked to a roster person, if any.
+func (s *Store) AccountByPersonID(personID int64) (Account, error) {
+	a, err := scanAccount(s.db.QueryRow(`SELECT `+accountColumns+` FROM accounts WHERE person_id = ?`, personID))
+	if errors.Is(err, sql.ErrNoRows) {
+		return Account{}, ErrNotFound
+	}
+	return a, err
+}
+
+// UsernameExists reports whether an account with this username (case
+// insensitive) already exists.
+func (s *Store) UsernameExists(username string) (bool, error) {
+	var n int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM accounts WHERE username = ? COLLATE NOCASE`, username).Scan(&n)
+	return n > 0, err
+}
+
+// CreateAccountForPerson creates a login account linked to a roster person,
+// with must_change_password set (the caller picks a known default
+// password). The caller must first check AccountByPersonID — this always
+// inserts, so calling it twice for the same person creates two accounts.
+func (s *Store) CreateAccountForPerson(personID int64, username, password string) (Account, error) {
+	username = strings.TrimSpace(username)
+	res, err := s.db.Exec(
+		`INSERT INTO accounts (username, password_hash, is_admin, must_change_password, person_id) VALUES (?, ?, 0, 1, ?)`,
+		username, hashPassword(password), personID,
+	)
+	if err != nil {
+		if isUniqueErr(err) {
+			return Account{}, fmt.Errorf("account %q: %w", username, ErrConflict)
+		}
+		return Account{}, err
+	}
+	id, _ := res.LastInsertId()
+	return s.GetAccount(id)
+}
+
 func (s *Store) GetAccount(id int64) (Account, error) {
-	var a Account
-	err := s.db.QueryRow(
-		`SELECT id, username, is_admin, created_at FROM accounts WHERE id = ?`, id,
-	).Scan(&a.ID, &a.Username, &a.IsAdmin, &a.CreatedAt)
+	a, err := scanAccount(s.db.QueryRow(`SELECT `+accountColumns+` FROM accounts WHERE id = ?`, id))
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrNotFound
 	}
@@ -125,10 +168,12 @@ func (s *Store) DeleteAccount(id int64) error {
 	return s.deleteByID("accounts", id)
 }
 
-// ChangePassword updates an account's password after verifying the current one.
+// ChangePassword updates an account's password after verifying the current
+// one, and clears must_change_password — this is the one path that's allowed
+// to clear it, since it proves the account holder chose the new password.
 func (s *Store) ChangePassword(id int64, current, next string) error {
 	res, err := s.db.Exec(
-		`UPDATE accounts SET password_hash = ? WHERE id = ? AND password_hash = ?`,
+		`UPDATE accounts SET password_hash = ?, must_change_password = 0 WHERE id = ? AND password_hash = ?`,
 		hashPassword(next), id, hashPassword(current),
 	)
 	if err != nil {
@@ -140,9 +185,15 @@ func (s *Store) ChangePassword(id int64, current, next string) error {
 	return nil
 }
 
-// ResetPassword sets an account's password without checking the old one (admin action).
+// ResetPassword sets an account's password without checking the old one
+// (admin action) and requires the account holder to change it again on next
+// login — an admin-chosen password is, like a roster default, not one the
+// account holder picked themselves.
 func (s *Store) ResetPassword(id int64, password string) error {
-	res, err := s.db.Exec(`UPDATE accounts SET password_hash = ? WHERE id = ?`, hashPassword(password), id)
+	res, err := s.db.Exec(
+		`UPDATE accounts SET password_hash = ?, must_change_password = 1 WHERE id = ?`,
+		hashPassword(password), id,
+	)
 	if err != nil {
 		return err
 	}
@@ -182,10 +233,10 @@ func (s *Store) SessionAccount(token string) (Account, error) {
 	var a Account
 	var expires string
 	err := s.db.QueryRow(
-		`SELECT a.id, a.username, a.is_admin, a.created_at, s.expires_at
+		`SELECT a.id, a.username, a.is_admin, a.must_change_password, a.person_id, a.created_at, s.expires_at
 		 FROM sessions s JOIN accounts a ON a.id = s.account_id
 		 WHERE s.token = ?`, token,
-	).Scan(&a.ID, &a.Username, &a.IsAdmin, &a.CreatedAt, &expires)
+	).Scan(&a.ID, &a.Username, &a.IsAdmin, &a.MustChangePassword, &a.PersonID, &a.CreatedAt, &expires)
 	if errors.Is(err, sql.ErrNoRows) {
 		return Account{}, ErrNotFound
 	}
