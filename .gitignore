@@ -1,0 +1,5 @@
+/co_tracker
+/data/
+*.db
+*.db-wal
+*.db-shm

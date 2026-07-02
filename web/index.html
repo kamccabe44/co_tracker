@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>CO Tracker — Daily Unit Schedule</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>CO Tracker</h1>
+    <div class="month-nav">
+      <button id="prev-month" title="Previous month">&#8592;</button>
+      <span id="month-label"></span>
+      <button id="next-month" title="Next month">&#8594;</button>
+      <button id="today-btn">Today</button>
+    </div>
+  </header>
+
+  <main class="layout">
+    <aside class="sidebar">
+      <section class="panel">
+        <h2>Business Units</h2>
+        <ul id="unit-list" class="unit-list"></ul>
+        <form id="unit-form" class="inline-form">
+          <input type="text" id="unit-name" placeholder="New unit name" required>
+          <input type="color" id="unit-color" value="#4f6df5" title="Unit color">
+          <button type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>People</h2>
+        <ul id="user-list" class="user-list"></ul>
+        <form id="user-form" class="inline-form">
+          <input type="text" id="user-name" placeholder="New person name" required>
+          <button type="submit">Add</button>
+        </form>
+      </section>
+
+      <section class="panel">
+        <h2>Import CSV</h2>
+        <label class="import-label">People <small>(name,email)</small>
+          <input type="file" id="import-users" accept=".csv,text/csv">
+        </label>
+        <label class="import-label">Schedule <small>(date,unit,users,notes)</small>
+          <input type="file" id="import-entries" accept=".csv,text/csv">
+        </label>
+        <p id="import-status" class="import-status"></p>
+      </section>
+    </aside>
+
+    <section class="calendar-wrap">
+      <div class="weekday-row" id="weekday-row"></div>
+      <div class="calendar" id="calendar"></div>
+    </section>
+  </main>
+
+  <!-- Entry create/edit dialog -->
+  <dialog id="entry-dialog">
+    <form id="entry-form" method="dialog">
+      <h2 id="entry-dialog-title">Add entry</h2>
+      <label>Date
+        <input type="date" id="entry-date" required>
+      </label>
+      <label>Business unit
+        <select id="entry-unit" required></select>
+      </label>
+      <label>People
+        <div id="entry-users" class="user-checks"></div>
+      </label>
+      <label>Notes
+        <input type="text" id="entry-notes" placeholder="Optional">
+      </label>
+      <div class="dialog-actions">
+        <button type="button" id="entry-delete" class="danger hidden">Delete</button>
+        <span class="spacer"></span>
+        <button type="button" id="entry-cancel">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <div id="tooltip" class="tooltip hidden" role="tooltip"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

@@ -1,0 +1,12 @@
+services:
+  co_tracker:
+    build: .
+    image: co_tracker:latest
+    ports:
+      - "8080:8080"
+    volumes:
+      - co_tracker_data:/data
+    restart: unless-stopped
+
+volumes:
+  co_tracker_data:

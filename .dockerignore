@@ -1,0 +1,9 @@
+.git
+data/
+*.db
+*.db-wal
+*.db-shm
+docker-compose.yml
+README.md
+docs/
+samples/
