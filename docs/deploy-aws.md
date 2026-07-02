@@ -6,7 +6,38 @@ of persistent disk**. That rules out (and out-prices) RDS, load balancers, and
 multi-AZ anything. Options below are ranked by monthly cost (us-east-1,
 approximate, excluding free tiers).
 
-## Option 1 — Lightsail instance (recommended, ≈ $5/month)
+## Option 0 — k3s on an existing host (≈ $0/month if you already run one)
+
+If you already run a k3s cluster for another app on this domain (e.g.
+os_alerts at `reports.1136mpco.com`, bootstrapped via its
+`scripts/k3s-setup.sh`), co_tracker can be a second Helm release on the same
+single-node cluster for no additional compute cost — just a new DNS record
+and a new Let's Encrypt certificate, both free.
+
+```sh
+# 1. DNS: point tracking.1136mpco.com at the same IP as reports.1136mpco.com.
+
+# 2. Edit helm/co-tracker/values-k3s.yaml — set a real admin password.
+
+# 3. Deploy (reuses the cluster's existing Traefik ingress + cert-manager
+#    ClusterIssuer, no re-bootstrap needed):
+./scripts/k3s-deploy.sh
+```
+
+This uses `helm/co-tracker/`, a chart deliberately kept simpler than
+os_alerts': no Postgres, no uploads volume — just the app and a 1Gi PVC for
+the SQLite file. **The Deployment hardcodes `replicas: 1`**: co_tracker's
+SQLite store is a single-writer connection, so unlike a stateless app this
+one must never be scaled horizontally without first moving the store off
+SQLite. Back up the database with `./scripts/k3s-backup.sh` (uses SQLite's
+online backup API through a throwaway pod, since the app image has no shell).
+
+If this is a *fresh* host with no k3s yet, run os_alerts'
+`scripts/k3s-setup.sh` first (installs k3s, Helm, cert-manager, and the
+`letsencrypt-prod` ClusterIssuer) — it's app-agnostic cluster bootstrap, not
+specific to os_alerts.
+
+## Option 1 — Lightsail instance (recommended if starting fresh, ≈ $5/month)
 
 Amazon Lightsail's smallest instances bundle compute, disk, and a generous
 transfer allowance for a flat price. The instance's disk persists, so SQLite

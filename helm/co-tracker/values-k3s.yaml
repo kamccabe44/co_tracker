@@ -1,0 +1,35 @@
+# values-k3s.yaml — deploy onto the single-node k3s host that already runs
+# os_alerts (reports.1136mpco.com). Usage: passed to helm by
+# scripts/k3s-deploy.sh — edit the admin password below before deploying.
+#
+# Assumes k3s + Helm + cert-manager + the "letsencrypt-prod" ClusterIssuer are
+# already installed on the host (true if os_alerts/scripts/k3s-setup.sh has
+# been run there). If this is a fresh host instead, see docs/deploy-aws.md for
+# the one-time cluster bootstrap.
+
+app:
+  image:
+    repository: co-tracker
+    tag: latest
+    pullPolicy: Never       # image is built locally and imported into k3s
+  auth:
+    users:
+      admin: "change-me-before-deploying"
+
+ingress:
+  enabled: true
+  className: traefik        # k3s ships Traefik by default
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  host: tracking.1136mpco.com
+  path: /
+  pathType: Prefix
+  tls:
+    - secretName: co-tracker-tls
+      hosts:
+        - tracking.1136mpco.com
+
+data:
+  storage:
+    size: 1Gi
+    storageClassName: ""    # uses k3s default local-path provisioner

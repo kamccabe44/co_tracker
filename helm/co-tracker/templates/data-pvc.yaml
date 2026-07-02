@@ -1,0 +1,16 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "co-tracker.fullname" . }}-data
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "co-tracker.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: {{ .Values.data.storage.size }}
+  {{- if .Values.data.storage.storageClassName }}
+  storageClassName: {{ .Values.data.storage.storageClassName }}
+  {{- end }}

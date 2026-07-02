@@ -1,0 +1,31 @@
+╔══════════════════════════════════════════════════════════╗
+║                       CO Tracker                          ║
+╚══════════════════════════════════════════════════════════╝
+
+Release: {{ .Release.Name }}
+Namespace: {{ .Release.Namespace }}
+
+━━━ Access ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.ingress.enabled }}
+Ingress enabled – visit: http{{ if .Values.ingress.tls }}s{{ end }}://{{ .Values.ingress.host }}
+{{- else if eq .Values.service.type "LoadBalancer" }}
+Get the external IP once assigned:
+  kubectl get svc {{ include "co-tracker.fullname" . }} -n {{ .Release.Namespace }} -w
+{{- else }}
+Port-forward to access locally:
+  kubectl port-forward svc/{{ include "co-tracker.fullname" . }} 8080:{{ .Values.service.port }} -n {{ .Release.Namespace }}
+  Then visit: http://localhost:8080
+{{- end }}
+
+━━━ Check deployment status ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  kubectl rollout status deployment/{{ include "co-tracker.fullname" . }} -n {{ .Release.Namespace }}
+
+━━━ Logs ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+  kubectl logs -l app.kubernetes.io/instance={{ .Release.Name }},app.kubernetes.io/component=app -n {{ .Release.Namespace }} -f
+
+━━━ Backup (SQLite is one file on the data PVC) ━━━━━━━━━━━━━━━━━━
+
+  ./scripts/k3s-backup.sh
