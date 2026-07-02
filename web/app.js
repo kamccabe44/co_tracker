@@ -6,6 +6,7 @@ const state = {
   units: [],
   users: [],
   entries: [], // entries for the visible grid range
+  me: null, // authenticated account {username, isAdmin}
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -14,6 +15,11 @@ const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // ---- api helpers ----
 async function api(path, opts = {}) {
   const res = await fetch(path, opts);
+  if (res.status === 401) {
+    // Session expired or signed out elsewhere — back to the login page.
+    window.location.href = "/login?next=" + encodeURIComponent(window.location.pathname);
+    throw new Error("authentication required");
+  }
   if (res.status === 204) return null;
   const body = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(body.error || `${res.status} ${res.statusText}`);
@@ -267,6 +273,118 @@ function openEntryDialog(entry) {
   dlg.showModal();
 }
 
+// ---- account management (admins only) ----
+async function loadMe() {
+  state.me = await api("/api/auth/me");
+  $("#nav-username").textContent = state.me.username;
+  if (state.me.isAdmin) {
+    $("#manage-accounts-item").classList.remove("d-none");
+    $("#manage-accounts-divider").classList.remove("d-none");
+  }
+}
+
+function accountsError(msg) {
+  const box = $("#accounts-error");
+  box.textContent = msg || "";
+  box.classList.toggle("d-none", !msg);
+}
+
+async function refreshAccounts() {
+  accountsError("");
+  let accounts;
+  try {
+    accounts = await api("/api/accounts");
+  } catch (err) {
+    accountsError(err.message);
+    return;
+  }
+  const rows = accounts.map((a) => {
+    const tr = document.createElement("tr");
+
+    const name = document.createElement("td");
+    name.className = "fw-semibold";
+    name.innerHTML = '<i class="bi bi-person-circle me-1 text-muted"></i>';
+    name.appendChild(document.createTextNode(a.username));
+    if (a.username === state.me.username) {
+      const you = document.createElement("span");
+      you.className = "badge bg-secondary ms-1";
+      you.textContent = "You";
+      name.appendChild(you);
+    }
+
+    const role = document.createElement("td");
+    const badge = document.createElement("span");
+    badge.className = a.isAdmin ? "badge bg-army" : "badge bg-secondary";
+    badge.textContent = a.isAdmin ? "Admin" : "User";
+    role.appendChild(badge);
+
+    const created = document.createElement("td");
+    created.className = "text-muted small";
+    created.textContent = a.createdAt;
+
+    const actions = document.createElement("td");
+    actions.className = "text-end";
+
+    const reset = document.createElement("button");
+    reset.type = "button";
+    reset.className = "btn btn-sm btn-outline-secondary me-1";
+    reset.innerHTML = '<i class="bi bi-key me-1"></i>Reset';
+    reset.addEventListener("click", async () => {
+      const password = prompt(`New password for ${a.username} (min 4 characters):`);
+      if (!password) return;
+      try {
+        await api(`/api/accounts/${a.id}/reset-password`, jsonReq("POST", { password }));
+        accountsError("");
+      } catch (err) {
+        accountsError(err.message);
+      }
+    });
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "btn btn-sm btn-outline-danger";
+    del.innerHTML = '<i class="bi bi-trash"></i>';
+    if (a.username === state.me.username) {
+      del.disabled = true;
+      del.title = "Cannot delete your own account";
+    }
+    del.addEventListener("click", async () => {
+      if (!confirm(`Delete account ${a.username}?`)) return;
+      try {
+        await api(`/api/accounts/${a.id}`, { method: "DELETE" });
+        await refreshAccounts();
+      } catch (err) {
+        accountsError(err.message);
+      }
+    });
+
+    actions.append(reset, del);
+    tr.append(name, role, created, actions);
+    return tr;
+  });
+  $("#accounts-body").replaceChildren(...rows);
+}
+
+function initAccountsModal() {
+  $("#accountsModal").addEventListener("show.bs.modal", refreshAccounts);
+  $("#account-form").addEventListener("submit", async (ev) => {
+    ev.preventDefault();
+    try {
+      await api("/api/accounts", jsonReq("POST", {
+        username: $("#account-username").value.trim(),
+        password: $("#account-password").value,
+        isAdmin: $("#account-admin").checked,
+      }));
+      $("#account-username").value = "";
+      $("#account-password").value = "";
+      $("#account-admin").checked = false;
+      await refreshAccounts();
+    } catch (err) {
+      accountsError(err.message);
+    }
+  });
+}
+
 // ---- generic action runner: do the call, then re-sync UI ----
 async function run(action) {
   try {
@@ -331,7 +449,11 @@ function init() {
     }
   });
 
-  refreshAll().catch((err) => alert(`Failed to load: ${err.message}`));
+  initAccountsModal();
+
+  loadMe()
+    .then(refreshAll)
+    .catch((err) => alert(`Failed to load: ${err.message}`));
 }
 
 function shiftMonth(delta) {

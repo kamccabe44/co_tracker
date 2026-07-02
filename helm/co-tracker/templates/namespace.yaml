@@ -1,0 +1,8 @@
+{{- if .Values.namespaceCreate }}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Release.Namespace }}
+  labels:
+    {{- include "co-tracker.labels" . | nindent 4 }}
+{{- end }}

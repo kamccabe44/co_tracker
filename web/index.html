@@ -4,85 +4,209 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>CO Tracker — Daily Unit Schedule</title>
+  <link rel="stylesheet" href="/vendor/bootstrap.min.css">
+  <link rel="stylesheet" href="/vendor/bootstrap-icons.min.css">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <header class="topbar">
-    <h1>CO Tracker</h1>
-    <div class="month-nav">
-      <button id="prev-month" title="Previous month">&#8592;</button>
-      <span id="month-label"></span>
-      <button id="next-month" title="Next month">&#8594;</button>
-      <button id="today-btn">Today</button>
-    </div>
-  </header>
 
-  <main class="layout">
-    <aside class="sidebar">
-      <section class="panel">
-        <h2>Business Units</h2>
+<nav class="navbar navbar-expand-lg navbar-dark bg-army">
+  <div class="container-fluid">
+    <a class="navbar-brand fw-bold" href="/">
+      <i class="bi bi-shield-fill me-2"></i>CO Tracker
+    </a>
+    <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMain">
+      <span class="navbar-toggler-icon"></span>
+    </button>
+    <div class="collapse navbar-collapse" id="navMain">
+      <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+        <li class="nav-item">
+          <a class="nav-link active" href="/">
+            <i class="bi bi-calendar3 me-1"></i>Schedule
+          </a>
+        </li>
+      </ul>
+      <ul class="navbar-nav ms-auto align-items-lg-center">
+        <li class="nav-item dropdown">
+          <a class="nav-link dropdown-toggle" href="#" role="button" data-bs-toggle="dropdown">
+            <i class="bi bi-person-circle me-1"></i><span id="nav-username">User</span>
+          </a>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li class="d-none" id="manage-accounts-item">
+              <a class="dropdown-item" href="#" data-bs-toggle="modal" data-bs-target="#accountsModal">
+                <i class="bi bi-people me-2"></i>Manage Accounts
+              </a>
+            </li>
+            <li class="d-none" id="manage-accounts-divider"><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/change-password">
+              <i class="bi bi-key me-2"></i>Change Password
+            </a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item text-danger" href="/logout">
+              <i class="bi bi-box-arrow-right me-2"></i>Sign Out
+            </a></li>
+          </ul>
+        </li>
+      </ul>
+    </div>
+  </div>
+</nav>
+
+<main class="layout container-fluid mt-3">
+  <aside class="sidebar">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-army text-white">
+        <strong><i class="bi bi-diagram-3 me-2"></i>Business Units</strong>
+      </div>
+      <div class="card-body">
         <ul id="unit-list" class="unit-list"></ul>
         <form id="unit-form" class="inline-form">
-          <input type="text" id="unit-name" placeholder="New unit name" required>
-          <input type="color" id="unit-color" value="#4f6df5" title="Unit color">
-          <button type="submit">Add</button>
+          <input type="text" id="unit-name" class="form-control form-control-sm" placeholder="New unit name" required>
+          <input type="color" id="unit-color" value="#4a5e3a" title="Unit color">
+          <button type="submit" class="btn btn-army btn-sm">Add</button>
         </form>
-      </section>
+      </div>
+    </div>
 
-      <section class="panel">
-        <h2>People</h2>
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-army text-white">
+        <strong><i class="bi bi-people me-2"></i>People</strong>
+      </div>
+      <div class="card-body">
         <ul id="user-list" class="user-list"></ul>
         <form id="user-form" class="inline-form">
-          <input type="text" id="user-name" placeholder="New person name" required>
-          <button type="submit">Add</button>
+          <input type="text" id="user-name" class="form-control form-control-sm" placeholder="New person name" required>
+          <button type="submit" class="btn btn-army btn-sm">Add</button>
         </form>
-      </section>
+      </div>
+    </div>
 
-      <section class="panel">
-        <h2>Import CSV</h2>
-        <label class="import-label">People <small>(name,email)</small>
-          <input type="file" id="import-users" accept=".csv,text/csv">
+    <div class="card border-0 shadow-sm mb-3">
+      <div class="card-header bg-army text-white">
+        <strong><i class="bi bi-filetype-csv me-2"></i>Import CSV</strong>
+      </div>
+      <div class="card-body">
+        <label class="import-label form-label">People <small class="text-muted">(name,email)</small>
+          <input type="file" id="import-users" class="form-control form-control-sm" accept=".csv,text/csv">
         </label>
-        <label class="import-label">Schedule <small>(date,unit,users,notes)</small>
-          <input type="file" id="import-entries" accept=".csv,text/csv">
+        <label class="import-label form-label">Schedule <small class="text-muted">(date,unit,users,notes)</small>
+          <input type="file" id="import-entries" class="form-control form-control-sm" accept=".csv,text/csv">
         </label>
-        <p id="import-status" class="import-status"></p>
-      </section>
-    </aside>
+        <p id="import-status" class="import-status text-muted small mb-0"></p>
+      </div>
+    </div>
+  </aside>
 
-    <section class="calendar-wrap">
+  <section class="calendar-col">
+    <div class="d-flex align-items-center gap-2 mb-2 month-nav">
+      <button id="prev-month" class="btn btn-outline-army btn-sm" title="Previous month">
+        <i class="bi bi-chevron-left"></i>
+      </button>
+      <span id="month-label" class="fw-bold fs-5 text-army"></span>
+      <button id="next-month" class="btn btn-outline-army btn-sm" title="Next month">
+        <i class="bi bi-chevron-right"></i>
+      </button>
+      <button id="today-btn" class="btn btn-army btn-sm ms-2">
+        <i class="bi bi-calendar-event me-1"></i>Today
+      </button>
+    </div>
+    <div class="calendar-wrap card border-0 shadow-sm">
       <div class="weekday-row" id="weekday-row"></div>
       <div class="calendar" id="calendar"></div>
-    </section>
-  </main>
+    </div>
+  </section>
+</main>
 
-  <!-- Entry create/edit dialog -->
-  <dialog id="entry-dialog">
-    <form id="entry-form" method="dialog">
-      <h2 id="entry-dialog-title">Add entry</h2>
-      <label>Date
-        <input type="date" id="entry-date" required>
-      </label>
-      <label>Business unit
-        <select id="entry-unit" required></select>
-      </label>
-      <label>People
-        <div id="entry-users" class="user-checks"></div>
-      </label>
-      <label>Notes
-        <input type="text" id="entry-notes" placeholder="Optional">
-      </label>
-      <div class="dialog-actions">
-        <button type="button" id="entry-delete" class="danger hidden">Delete</button>
-        <span class="spacer"></span>
-        <button type="button" id="entry-cancel">Cancel</button>
-        <button type="submit" class="primary">Save</button>
+<footer class="footer mt-5 py-3 bg-light border-top">
+  <div class="container-fluid text-center text-muted small">
+    CO Tracker &mdash; Daily Unit Schedule
+  </div>
+</footer>
+
+<!-- Entry create/edit dialog -->
+<dialog id="entry-dialog">
+  <form id="entry-form" method="dialog">
+    <h2 id="entry-dialog-title">Add entry</h2>
+    <label>Date
+      <input type="date" id="entry-date" required>
+    </label>
+    <label>Business unit
+      <select id="entry-unit" required></select>
+    </label>
+    <label>People
+      <div id="entry-users" class="user-checks"></div>
+    </label>
+    <label>Notes
+      <input type="text" id="entry-notes" placeholder="Optional">
+    </label>
+    <div class="dialog-actions">
+      <button type="button" id="entry-delete" class="btn btn-outline-danger btn-sm hidden">Delete</button>
+      <span class="spacer"></span>
+      <button type="button" id="entry-cancel" class="btn btn-outline-secondary btn-sm">Cancel</button>
+      <button type="submit" class="btn btn-army btn-sm">Save</button>
+    </div>
+  </form>
+</dialog>
+
+<!-- Accounts management modal (admins only) -->
+<div class="modal fade" id="accountsModal" tabindex="-1" aria-hidden="true">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header bg-army text-white">
+        <h5 class="modal-title"><i class="bi bi-people-fill me-2"></i>Account Management</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
       </div>
-    </form>
-  </dialog>
+      <div class="modal-body">
+        <p class="text-muted small mb-2">Manage who can sign in to CO Tracker.</p>
+        <div id="accounts-error" class="alert alert-danger py-2 small d-none"></div>
+        <table class="table table-hover align-middle mb-4">
+          <thead class="table-light">
+            <tr>
+              <th>Username</th>
+              <th>Role</th>
+              <th>Created</th>
+              <th class="text-end"></th>
+            </tr>
+          </thead>
+          <tbody id="accounts-body"></tbody>
+        </table>
 
-  <div id="tooltip" class="tooltip hidden" role="tooltip"></div>
+        <div class="card border-0 shadow-sm">
+          <div class="card-header bg-army text-white">
+            <strong><i class="bi bi-person-plus me-2"></i>Add New Account</strong>
+          </div>
+          <div class="card-body">
+            <form id="account-form" class="row g-3 align-items-end">
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">Username <span class="text-danger">*</span></label>
+                <input type="text" id="account-username" class="form-control form-control-sm"
+                       placeholder="e.g. 3rdPlatoon" required maxlength="50" autocomplete="off">
+              </div>
+              <div class="col-md-4">
+                <label class="form-label fw-semibold small">Password <span class="text-danger">*</span></label>
+                <input type="password" id="account-password" class="form-control form-control-sm"
+                       placeholder="Minimum 4 characters" required minlength="4" autocomplete="new-password">
+              </div>
+              <div class="col-md-2">
+                <div class="form-check">
+                  <input class="form-check-input" type="checkbox" id="account-admin">
+                  <label class="form-check-label fw-semibold small" for="account-admin">Admin</label>
+                </div>
+              </div>
+              <div class="col-md-2">
+                <button type="submit" class="btn btn-army btn-sm w-100">Add</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <script src="app.js"></script>
+<div id="tooltip" class="tooltip-box hidden" role="tooltip"></div>
+
+<script src="/vendor/bootstrap.bundle.min.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

@@ -1,16 +1,43 @@
-# Deploying CO Tracker on AWS at the lowest cost
+# Deploying CO Tracker on AWS
 
-The app is a single container with an embedded SQLite database, so the only
-infrastructure it needs is **one small compute instance and a few hundred MB
-of persistent disk**. That rules out (and out-prices) RDS, load balancers, and
-multi-AZ anything. Options below are ranked by monthly cost (us-east-1,
-approximate, excluding free tiers).
+The app is a single container with an embedded SQLite database — the whole
+app, data included, is one deployable unit. Options below trade off cost
+against server upkeep; pick the point on that spectrum that fits.
 
-## Option 1 — Lightsail instance (recommended, ≈ $5/month)
+## Current: ECS Fargate + EFS (fully managed, ≈ $27-30/month)
+
+**This is what's deployed.** See **[deploy/production/README.md](../deploy/production/README.md)**
+for the full Terraform stack: one Fargate task (no auto-scaling — SQLite is
+single-writer, so this is intentionally not horizontally scaled), an EFS
+volume so the SQLite file survives task restarts/redeploys, an ALB, and a
+Route 53 alias at `tracking.1136mpco.com`.
+
+No server to patch, ever — the tradeoff is the ALB's fixed ~$17-19/month,
+which dominates the bill regardless of traffic. Run `use_fargate_spot = true`
+in `terraform.tfvars` to cut the compute portion by ~70% (occasional brief
+interruptions, auto-rescheduled).
+
+This mirrors os_alerts' own `deploy/production` Terraform (ECS Fargate + ALB),
+minus the parts specific to that app: no Aurora (co_tracker keeps SQLite — see
+"Why this app fits the cheap end" below), no S3 uploads bucket, no CloudFront
+(a plain ALB can be aliased directly from Route 53; CloudFront in os_alerts'
+stack exists for App Runner-specific reasons that don't apply here).
+
+> AWS App Runner (previously the simplest managed-container option) stopped
+> accepting new customers April 30, 2026. AWS's suggested replacement, **ECS
+> Express Mode**, wasn't used here: it always provisions its own ALB and only
+> supports a single container at creation time, so adding the EFS-backed
+> volume this app needs means editing the generated task definition by hand
+> anyway — at that point, hand-written Terraform (what's in `deploy/production/`)
+> gives the same result with no less effort and much more control.
+
+## Cheaper alternatives, if a small amount of server upkeep is acceptable
+
+### Lightsail instance (≈ $5/month)
 
 Amazon Lightsail's smallest instances bundle compute, disk, and a generous
 transfer allowance for a flat price. The instance's disk persists, so SQLite
-just works. This is the cheapest option that is still simple to operate.
+just works.
 
 ```sh
 # 1. Create the smallest Lightsail instance (Amazon Linux 2023), then SSH in.
@@ -27,8 +54,10 @@ sudo docker run -d --name co_tracker --restart unless-stopped \
 ```
 
 Attach a Lightsail static IP (free while attached) and open port 80 in the
-Lightsail firewall. For HTTPS, put Caddy or the Lightsail load-balancer-free
-approach of your choice in front, or use Cloudflare's free tier for TLS.
+Lightsail firewall. For HTTPS, put Caddy in front (auto-provisions Let's
+Encrypt with zero config), or use Cloudflare's free tier for TLS. Enable
+`unattended-upgrades` for hands-off OS security patching — combined with
+`--restart unless-stopped`, ongoing touch time is close to zero.
 
 **Backups**: the whole database is one file. A cron line covers it:
 
@@ -37,54 +66,43 @@ docker run --rm -v co_tracker_data:/data -v /home/ec2-user/backup:/backup \
   alpine cp /data/co_tracker.db /backup/co_tracker-$(date +%F).db
 ```
 
-## Option 2 — EC2 `t4g.nano` (≈ $4/month, more knobs)
+### EC2 `t4g.nano` (≈ $4/month, more knobs)
 
 The absolute cheapest always-on compute: `t4g.nano` (2 vCPU burstable ARM,
-0.5 GB RAM) at ~$3.06/month on-demand plus an 8 GB gp3 EBS volume (~$0.64).
-Same Docker steps as Lightsail. Build the image with
-`docker build --platform linux/arm64` (the Go build is architecture-agnostic;
-no code changes needed). Buy a 1-year no-upfront reservation or use spot to
-roughly halve it. Choose this over Lightsail only if you're comfortable
-managing security groups, EBS, and an Elastic IP yourself.
+0.5 GB RAM) at ~$3.06/month on-demand plus an 8 GB gp3 EBS volume (~$0.64) —
+note AWS now also charges ~$3.65/month for a public IPv4 address on EC2,
+which puts this close to Lightsail's flat rate anyway. Same Docker steps as
+Lightsail. Build the image with `docker build --platform linux/arm64` (the Go
+build is architecture-agnostic; no code changes needed). Choose this over
+Lightsail only if you're comfortable managing security groups, EBS, and an
+Elastic IP yourself.
 
-The nano's 0.5 GB RAM is plenty: the container idles around 10–20 MB.
+## k3s on a shared host (currently unused — no k3s host is running)
 
-## Option 3 — ECS on Fargate + EFS (≈ $12+/month, fully managed)
-
-The "container-native" managed option: no instances to patch.
-
-- Push the image to **ECR** (private repo, ~$0.10/GB-month; the image is 14 MB).
-- Create an **EFS** filesystem and mount it at `/data` in the task definition
-  so SQLite survives task restarts.
-- One Fargate task at the minimum size (0.25 vCPU / 0.5 GB) runs ~$9/month
-  on-demand, ~$3/month on Fargate Spot (fine here — brief interruptions just
-  restart the task and the DB is on EFS).
-- Skip the load balancer (that alone is ~$16/month): give the task a public
-  IP and point DNS at it, or front it with CloudFront/Cloudflare.
-- Point the target-group/container health check at `GET /healthz`.
-
-Note EFS adds ~$0.30/GB-month plus per-request charges — trivial at this scale.
-
-## Option 4 — App Runner (pay-per-use, but no disk)
-
-App Runner pauses billing when idle, which sounds ideal for an internal tool —
-but it has **no persistent storage**, so SQLite data would vanish on
-deploys/restarts. Only consider it if you later swap the store for RDS or
-DynamoDB, at which point the DB costs more than options 1–3 anyway.
+`helm/co-tracker/` and `scripts/k3s-deploy.sh` / `scripts/k3s-backup.sh` still
+exist in this repo: if a k3s cluster is ever running again for another app on
+this domain, co_tracker can ride on it as a second Helm release for close to
+$0 additional cost (just a new DNS record and a free Let's Encrypt cert). See
+the chart's `values-k3s.yaml` and `README.md`'s git history for the original
+walkthrough. Not applicable right now — the box this was written for was
+decommissioned in favor of the ECS deployment above.
 
 ## Why this app fits the cheap end
 
 - **One static binary, `FROM scratch`**: 14 MB image, ~15 MB RSS — fits the
-  smallest instance sizes AWS sells.
-- **SQLite, not a DB server**: no RDS minimum (~$12/month), no connection
-  management, one-file backups. WAL mode is enabled; the app serializes writes
+  smallest instance sizes AWS sells, and the smallest Fargate task size with
+  room to spare.
+- **SQLite, not a DB server**: no RDS/Aurora minimum, no connection pool to
+  tune, one-file backups. WAL mode is enabled; the app serializes writes
   through a single connection, which is more than enough for a team-scale
   scheduling tool.
 - **No build-step frontend**: the UI is embedded in the binary; there is no
   S3/CloudFront asset pipeline to pay for or maintain.
 
-**Scaling note**: this design intentionally runs a single writer instance. If
-you ever need horizontal scaling or multi-writer HA, swap `internal/store` to
-Postgres (the store is isolated behind a small interface-shaped package) and
-move to Fargate + Aurora Serverless — but for daily unit tracking that day may
-never come.
+**Scaling note**: this design intentionally runs a single writer instance —
+`desired_count` is hardcoded, not a Terraform variable, for exactly this
+reason. If you ever need horizontal scaling or multi-writer HA, swap
+`internal/store` to Postgres (the store is isolated behind a small
+interface-shaped package) first — but for daily unit tracking that day may
+never come, and doing it prematurely trades away the "one container, no
+separate database" simplicity for no benefit.

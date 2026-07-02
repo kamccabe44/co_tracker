@@ -1,0 +1,64 @@
+# ── Application ───────────────────────────────────────────────────────────────
+app:
+  image:
+    repository: co-tracker
+    tag: latest
+    pullPolicy: Always
+
+  # NOTE: the Deployment template hardcodes replicas: 1 regardless of any value
+  # here. internal/store keeps a single SQLite connection (WAL mode, one
+  # writer) — a second pod would either fail to attach the RWO volume or
+  # corrupt the database. Do not add a replica count knob without first
+  # moving the store off SQLite.
+
+  resources:
+    requests:
+      memory: "32Mi"
+      cpu: "25m"
+    limits:
+      memory: "128Mi"
+      cpu: "200m"
+
+  # Initial login accounts: username -> password. Only applied once, when the
+  # accounts table is empty (see internal/store/auth.go SeedAccounts) — change
+  # these for any real deployment, and rotate the password in-app afterward.
+  auth:
+    users:
+      admin: "admin"
+
+  # Extra environment variables injected into the app container
+  extraEnv: []
+  # - name: FOO
+  #   value: bar
+
+# ── SQLite data persistence ──────────────────────────────────────────────────
+data:
+  storage:
+    size: 1Gi
+    # storageClassName: ""   # leave empty to use cluster default
+
+# ── Service ────────────────────────────────────────────────────────────────────
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+
+# ── Ingress ────────────────────────────────────────────────────────────────────
+ingress:
+  enabled: false
+  className: ""
+  annotations: {}
+  # kubernetes.io/ingress.class: nginx
+  host: co-tracker.local
+  path: /
+  pathType: Prefix
+  tls: []
+  # - secretName: co-tracker-tls
+  #   hosts:
+  #     - co-tracker.local
+
+# ── Namespace ──────────────────────────────────────────────────────────────────
+namespaceCreate: true
+
+# ── Image pull secrets ─────────────────────────────────────────────────────────
+imagePullSecrets: []

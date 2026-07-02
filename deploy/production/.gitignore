@@ -1,0 +1,17 @@
+# Terraform state and local files
+.terraform/
+.terraform.tfstate.lock.info
+*.tfstate
+*.tfstate.*
+crash.log
+crash.*.log
+
+# Variable files may contain secrets — keep the example only
+*.tfvars
+*.tfvars.json
+!terraform.tfvars.example
+
+# Plan output
+*.tfplan
+
+# Keep the provider lock file committed (do NOT ignore .terraform.lock.hcl)

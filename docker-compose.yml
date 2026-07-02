@@ -4,6 +4,10 @@ services:
     image: co_tracker:latest
     ports:
       - "8080:8080"
+    environment:
+      # Initial login accounts (username -> password), applied only when the
+      # accounts table is empty. "admin" gets admin privileges.
+      USERS_JSON: '{"admin": "admin"}'
     volumes:
       - co_tracker_data:/data
     restart: unless-stopped
